@@ -11,13 +11,13 @@ pub fn send_magic_packet(mac_addr: &[u8;6]) -> usize {
     socket.set_broadcast(true).expect("broadcast failed");
 
     let res = socket
-        .send_to(&get_magic_packet(mac_addr), "255.255.255.255:9")
+        .send_to(&make_magic_packet(mac_addr), "255.255.255.255:9")
         .expect("send magic packet failed");
     debug!("send bytes length {}", res);
     res
 }
 
-fn get_magic_packet(mac_addr: &[u8; 6]) -> [u8; 102] {
+fn make_magic_packet(mac_addr: &[u8; 6]) -> [u8; 102] {
     let mut magic_packet = [0u8; 102];
     magic_packet[..6].copy_from_slice(b"\xff\xff\xff\xff\xff\xff");
     for i in 1..17 {
