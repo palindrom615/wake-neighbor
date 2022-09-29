@@ -1,10 +1,8 @@
-use std::io;
-use log::{debug, error, info, warn};
-use std::net::UdpSocket;
-use std::str::FromStr;
-use pnet::util::MacAddr;
+use log::debug;
 
-pub fn send_magic_packet(mac_addr: &[u8;6]) -> usize {
+use std::net::UdpSocket;
+
+pub fn send_magic_packet(mac_addr: &[u8; 6]) -> usize {
     let socket = UdpSocket::bind("0.0.0.0:0").expect("bind failed");
     debug!("bound socket {}", socket.local_addr().unwrap());
 
