@@ -1,19 +1,25 @@
+use std::env;
 use log::{debug, error, info, warn};
 use std::net::UdpSocket;
-
-const MAC_ADDR: &[u8; 6] = b"\xa8\xa1\x59\x5c\xd7\xff";
+use std::str::FromStr;
+use pnet::util::MacAddr;
 
 fn main() {
     env_logger::init();
+
+    let mac_addr = MacAddr::from_str(
+        &env::args().nth(1).expect("no mac address")
+    ).expect("no valid mac address");
+
     let socket = UdpSocket::bind("0.0.0.0:0").expect("bind failed");
     debug!("bound socket {}", socket.local_addr().unwrap());
 
     socket.set_broadcast(true).expect("broadcast failed");
 
     let res = socket
-        .send_to(&get_magic_packet(MAC_ADDR), "255.255.255.255:9")
+        .send_to(&get_magic_packet(&mac_addr.octets()), "255.255.255.255:9")
         .expect("send magic packet failed");
-    debug!("send bytes of {}", res)
+    debug!("send bytes length {}", res)
 }
 
 fn get_magic_packet(mac_addr: &[u8; 6]) -> [u8; 102] {
