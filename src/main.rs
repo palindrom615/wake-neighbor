@@ -4,18 +4,19 @@ use std::net::Ipv4Addr;
 
 use std::str::FromStr;
 use wake_neighbor::lookup::{lookup_hostname, lookup_ipv4};
-use wake_neighbor::send::send_magic_packet;
+use wake_neighbor::send::MagicPacket;
 
 fn main() {
     env_logger::init();
 
     let arg1 = &env::args().nth(1).expect("no destination");
 
-    match parse_arg(arg1) {
-        Destination::Mac(mac_addr) => send_magic_packet(mac_addr),
-        Destination::Ipv4(ip_addr) => send_magic_packet(lookup_ipv4(ip_addr)),
-        Destination::HostName(hostname) => send_magic_packet(lookup_hostname(hostname)),
+    let mac_addr = match parse_arg(arg1) {
+        Destination::Mac(mac_addr) => mac_addr,
+        Destination::Ipv4(ip_addr) => lookup_ipv4(ip_addr),
+        Destination::HostName(hostname) => lookup_hostname(hostname),
     };
+    MagicPacket::new(mac_addr).send();
 }
 
 fn parse_arg(arg1: &str) -> Destination {
