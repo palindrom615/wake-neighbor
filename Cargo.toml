@@ -8,4 +8,4 @@ edition = "2021"
 [dependencies]
 log = "0.4"
 env_logger = "0.9.1"
-pnet = "0.31.0"
+pnet = { version = "0.31.0", features = ["default", "std"] }
