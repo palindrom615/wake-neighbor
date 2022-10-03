@@ -1,14 +1,11 @@
-use log::{debug, info};
+use log::debug;
 use pnet::datalink::{interfaces, Channel, NetworkInterface};
 use pnet::packet::arp::{ArpHardwareTypes, ArpOperations, ArpPacket, MutableArpPacket};
-use pnet::packet::ethernet::{EtherTypes, MutableEthernetPacket};
+use pnet::packet::ethernet::{EtherTypes, EthernetPacket, MutableEthernetPacket};
 use pnet::packet::{MutablePacket, Packet};
 use pnet::util::MacAddr;
 use std::net::{IpAddr, Ipv4Addr};
-
-/// Same default value with [linux arp](https://man7.org/linux/man-pages/man7/arp.7.html)
-// const RETRANS_TIME_MS: i32 = 1000;
-// const MCAST_SOLICIT: i32 = 3;
+use std::time::{Duration, Instant};
 
 pub fn get_mac_addr(target_ip: Ipv4Addr) -> MacAddr {
     let interfaces = interfaces();
@@ -26,7 +23,7 @@ pub fn get_mac_addr(target_ip: Ipv4Addr) -> MacAddr {
             IpAddr::V4(ip) => ip,
             _ => unreachable!(),
         })
-        .expect("No IP address bound");
+        .expect("No interface for destination IP address");
     debug!("{}", source_ip);
 
     let (mut sender, mut receiver) = match pnet::datalink::channel(interface, Default::default()) {
@@ -57,23 +54,36 @@ pub fn get_mac_addr(target_ip: Ipv4Addr) -> MacAddr {
 
     ethernet_packet.set_payload(arp_packet.packet_mut());
 
-    sender
-        .send_to(ethernet_packet.packet(), None)
-        .unwrap()
-        .unwrap();
+    // Same default value with [linux arp](https://man7.org/linux/man-pages/man7/arp.7.html)
+    const RETRANS_TIME_MS: u64 = 1000;
+    const MCAST_SOLICIT: u8 = 3;
 
-    info!("Sent ARP request");
-    loop {
-        let buf = receiver.next().unwrap();
-        let arp = ArpPacket::new(&buf[MutableEthernetPacket::minimum_packet_size()..]).unwrap();
-        debug!("{:?}", arp);
-        if arp.get_sender_proto_addr() == target_ip
-            && arp.get_target_hw_addr() == interface.mac.unwrap()
-        {
-            info!("Received reply");
-            return arp.get_sender_hw_addr();
+    for i in 0..MCAST_SOLICIT {
+        sender
+            .send_to(ethernet_packet.packet(), None)
+            .expect("Send ARP failed")
+            .expect("Send ARP failed");
+        debug!("Sent ARP request");
+        let start = Instant::now();
+        while Instant::now() - start <= Duration::from_millis(RETRANS_TIME_MS) {
+            let buf = receiver.next().unwrap();
+            let pkt = EthernetPacket::new(buf).unwrap();
+            if pkt.get_ethertype() != EtherTypes::Arp {
+                continue;
+            }
+            pkt.payload();
+            let arp = ArpPacket::new(pkt.payload()).unwrap();
+            debug!("Received {:?}", arp);
+            if arp.get_sender_proto_addr() == target_ip
+                && arp.get_target_hw_addr() == interface.mac.unwrap()
+            {
+                debug!("Received reply");
+                return arp.get_sender_hw_addr();
+            }
         }
+        debug!("ARP try {} timeout", i);
     }
+    panic!("Host not reachable")
 }
 
 fn get_lpm(interface: &NetworkInterface, target_ip: Ipv4Addr) -> u8 {
